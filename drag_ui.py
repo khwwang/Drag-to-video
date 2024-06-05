@@ -31,7 +31,7 @@ with gr.Blocks() as demo:
         gr.Markdown("""
         # Official Implementation of [DragDiffusion](https://arxiv.org/abs/2306.14435)
         """)
-
+    # 임의의 이미지를 삽입해서 edit을 진행하는 부분.
     # UI components for editing real images
     with gr.Tab(label="Editing Real Image"):
         mask = gr.State(value=None) # store mask
@@ -44,10 +44,12 @@ with gr.Blocks() as demo:
                     show_label=True, height=LENGTH, width=LENGTH) # for mask painting
                 train_lora_button = gr.Button("Train LoRA")
             with gr.Column():
-                gr.Markdown("""<p style="text-align: center; font-size: 20px">Click Points</p>""")
+                gr.Markdown("""<p style="text-align: center; font-size: 20px">Get Points</p>""")
                 input_image = gr.Image(type="numpy", label="Click Points",
                     show_label=True, height=LENGTH, width=LENGTH, interactive=False) # for points clicking
-                undo_button = gr.Button("Undo point")
+                with gr.Row():
+                    get_points_button = gr.Button("Get Points")
+                    undo_button = gr.Button("Undo point")
             with gr.Column():
                 gr.Markdown("""<p style="text-align: center; font-size: 20px">Editing Results</p>""")
                 output_image = gr.Image(type="numpy", label="Editing Results",
@@ -107,6 +109,7 @@ with gr.Blocks() as demo:
                 lora_batch_size = gr.Number(value=4, label="LoRA batch size", precision=0)
                 lora_rank = gr.Number(value=16, label="LoRA rank", precision=0)
 
+    # Prompt를 통해 이미지를 생성한 뒤, 그것에 대해서 edit을 진행하는 부분.
     # UI components for editing generated images
     with gr.Tab(label="Editing Generated Image"):
         mask_gen = gr.State(value=None) # store mask
@@ -226,7 +229,15 @@ with gr.Blocks() as demo:
         [canvas],
         [original_image, selected_points, input_image, mask]
     )
+    
+    # 기존의 image에서 points를 입력받는 부분
     input_image.select(
+        get_points,
+        [input_image, selected_points],
+        [input_image],
+    )
+    # 내가 추가한 버튼
+    get_points_button.click(
         get_points,
         [input_image, selected_points],
         [input_image],

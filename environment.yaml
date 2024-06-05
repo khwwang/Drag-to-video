@@ -24,7 +24,7 @@ dependencies:
       - transformers==4.27.0
       - webdataset==0.2.5
       - kornia==0.6
-      - open_clip_torch==2.16.0
+      - open_clip_torch==2.1cv.0
       - invisible-watermark>=0.1.5
       - streamlit-drawable-canvas==0.8.0
       - torchmetrics==0.6.0

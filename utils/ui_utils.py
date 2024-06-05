@@ -17,7 +17,8 @@
 # *************************************************************************
 
 import os
-import cv2
+import importlib
+cv2 = importlib.import_module('cv2')
 import numpy as np
 import gradio as gr
 from copy import deepcopy
@@ -106,13 +107,22 @@ def store_img_gen(img):
     # when new image is uploaded, `selected_points` should be empty
     return image, [], masked_img, mask
 
+handle_or_target = 0
 # user click the image to get points, and show the points on the image
 def get_points(img,
                sel_pix,
                evt: gr.SelectData):
-    # collect the selected point
+    global handle_or_target
+    # # collect the selected point
+    # print("테스트용 :",evt.index) # 내가 바꾼부분 시작
+    # if handle_or_target % 2 == 0:
+    #     sel_pix.append((187, 230))
+    #     handle_or_target = 1
+    # else:
+    #     sel_pix.append((103, 230))
+    #     handle_or_target = 0# 내가 바꾼 부분 끝
+    # # draw points
     sel_pix.append(evt.index)
-    # draw points
     points = []
     for idx, point in enumerate(sel_pix):
         if idx % 2 == 0:
