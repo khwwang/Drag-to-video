@@ -48,7 +48,7 @@ with gr.Blocks() as demo:
                 input_image = gr.Image(type="numpy", label="Click Points",
                     show_label=True, height=LENGTH, width=LENGTH, interactive=False) # for points clicking
                 with gr.Row():
-                    get_points_button = gr.Button("Get Points")
+                    get_points_button = gr.Button("Get Points") # 내가 추가한 버튼
                     undo_button = gr.Button("Undo point")
             with gr.Column():
                 gr.Markdown("""<p style="text-align: center; font-size: 20px">Editing Results</p>""")
@@ -61,6 +61,7 @@ with gr.Blocks() as demo:
         # general parameters
         with gr.Row():
             prompt = gr.Textbox(label="Prompt")
+            input_text = gr.Textbox(label="Input Text")
             lora_path = gr.Textbox(value="./lora_tmp", label="LoRA path")
             lora_status_bar = gr.Textbox(label="display LoRA training status")
 
@@ -239,7 +240,7 @@ with gr.Blocks() as demo:
     # 내가 추가한 버튼
     get_points_button.click(
         get_points,
-        [input_image, selected_points],
+        [input_image, selected_points,input_text],
         [input_image],
     )
     undo_button.click(

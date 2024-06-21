@@ -44,6 +44,47 @@ from .lora_utils import train_lora
 from .attn_utils import register_attention_editor_diffusers, MutualSelfAttentionControl
 from .freeu_utils import register_free_upblock2d, register_free_crossattn_upblock2d
 
+from torchvision.models.detection import keypointrcnn_resnet50_fpn, KeypointRCNN_ResNet50_FPN_Weights
+from torchvision.transforms.functional import to_tensor
+import re
+
+# Define the label to index mapping
+label_to_index = {
+    "nose": 0,
+    "left eye": 1,
+    "right eye": 2,
+    "left ear": 3,
+    "right ear": 4,
+    "left shoulder": 5,
+    "right shoulder": 6,
+    "left elbow": 7,
+    "right elbow": 8,
+    "left wrist": 9,
+    "right wrist": 10,
+    "left hip": 11,
+    "right hip": 12,
+    "left knee": 13,
+    "right knee": 14,
+    "left ankle": 15,
+    "right ankle": 16
+}
+
+
+def extract_keypoints(input_text, keypoints):
+    # Create a regex pattern to match any of the labels in the text
+    pattern = re.compile(r'\b(?:' + '|'.join(re.escape(label) for label in label_to_index.keys()) + r')\b', re.IGNORECASE)
+    found_labels = pattern.findall(input_text)
+    indices = [label_to_index[label.lower()] for label in found_labels]
+    
+    extracted_keypoints = []
+    for i, person_keypoints in enumerate(keypoints):
+        person_kps = {}
+        for idx in indices:
+            x, y, v = person_keypoints[idx]
+            person_kps[list(label_to_index.keys())[idx]] = (x.item(), y.item(), v.item())
+        extracted_keypoints.append(person_kps)
+    return extracted_keypoints
+
 
 # -------------- general UI functionality --------------
 def clear_all(length=480):
@@ -111,7 +152,8 @@ handle_or_target = 0
 # user click the image to get points, and show the points on the image
 def get_points(img,
                sel_pix,
-               evt: gr.SelectData):
+               input_text):
+    ## evt: gr.SelectData):
     global handle_or_target
     # # collect the selected point
     # print("테스트용 :",evt.index) # 내가 바꾼부분 시작
@@ -122,7 +164,37 @@ def get_points(img,
     #     sel_pix.append((103, 230))
     #     handle_or_target = 0# 내가 바꾼 부분 끝
     # # draw points
-    sel_pix.append(evt.index)
+    # for i in range(2):
+    #     if(i%2==0):
+    #         sel_pix.append((187, 230))
+    #     else:
+    #         sel_pix.append((103, 230))
+    
+    weights = KeypointRCNN_ResNet50_FPN_Weights.DEFAULT
+    keypoint_model = keypointrcnn_resnet50_fpn(weights=weights, progress=False)
+    keypoint_model = keypoint_model.eval()
+    
+    
+    keypoints_img = img.copy()
+    # Convert the image to a Torch tensor and add an extra dimension at the beginning
+    keypoints_img = to_tensor(keypoints_img).unsqueeze(0)
+    
+    
+    # Perform the inference
+    with torch.no_grad():
+        outputs = keypoint_model(keypoints_img)
+        
+    keypoints = outputs[0]['keypoints']
+    input_text = input_text
+    
+    extracted_keypoints = extract_keypoints(input_text, keypoints)
+
+    for person_kps in extracted_keypoints:
+        for label, (x, y, v) in person_kps.items():
+            if v > 0:  # Only consider visible keypoints
+                sel_pix.append((int(x), int(y)))
+                sel_pix.append((int(x) + 50, int(y)))
+                
     points = []
     for idx, point in enumerate(sel_pix):
         if idx % 2 == 0:
