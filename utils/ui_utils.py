@@ -48,42 +48,6 @@ from torchvision.models.detection import keypointrcnn_resnet50_fpn, KeypointRCNN
 from torchvision.transforms.functional import to_tensor
 import re
 
-# Define the label to index mapping
-label_to_index = {
-    "nose": 0,
-    "left eye": 1,
-    "right eye": 2,
-    "left ear": 3,
-    "right ear": 4,
-    "left shoulder": 5,
-    "right shoulder": 6,
-    "left elbow": 7,
-    "right elbow": 8,
-    "left wrist": 9,
-    "right wrist": 10,
-    "left hip": 11,
-    "right hip": 12,
-    "left knee": 13,
-    "right knee": 14,
-    "left ankle": 15,
-    "right ankle": 16
-}
-
-
-def extract_keypoints(input_text, keypoints):
-    # Create a regex pattern to match any of the labels in the text
-    pattern = re.compile(r'\b(?:' + '|'.join(re.escape(label) for label in label_to_index.keys()) + r')\b', re.IGNORECASE)
-    found_labels = pattern.findall(input_text)
-    indices = [label_to_index[label.lower()] for label in found_labels]
-    
-    extracted_keypoints = []
-    for i, person_keypoints in enumerate(keypoints):
-        person_kps = {}
-        for idx in indices:
-            x, y, v = person_keypoints[idx]
-            person_kps[list(label_to_index.keys())[idx]] = (x.item(), y.item(), v.item())
-        extracted_keypoints.append(person_kps)
-    return extracted_keypoints
 
 
 # -------------- general UI functionality --------------
@@ -149,51 +113,93 @@ def store_img_gen(img):
     return image, [], masked_img, mask
 
 handle_or_target = 0
-# user click the image to get points, and show the points on the image
-def get_points(img,
-               sel_pix,
-               input_text):
-    ## evt: gr.SelectData):
-    global handle_or_target
-    # # collect the selected point
-    # print("테스트용 :",evt.index) # 내가 바꾼부분 시작
-    # if handle_or_target % 2 == 0:
-    #     sel_pix.append((187, 230))
-    #     handle_or_target = 1
-    # else:
-    #     sel_pix.append((103, 230))
-    #     handle_or_target = 0# 내가 바꾼 부분 끝
-    # # draw points
-    # for i in range(2):
-    #     if(i%2==0):
-    #         sel_pix.append((187, 230))
-    #     else:
-    #         sel_pix.append((103, 230))
+
+# Define the label to index mapping
+label_to_index = {
+    "nose": 0,
+    "left eye": 1,
+    "right eye": 2,
+    "left ear": 3,
+    "right ear": 4,
+    "left shoulder": 5,
+    "right shoulder": 6,
+    "left elbow": 7,
+    "right elbow": 8,
+    "left wrist": 9,
+    "right wrist": 10,
+    "left hip": 11,
+    "right hip": 12,
+    "left knee": 13,
+    "right knee": 14,
+    "left ankle": 15,
+    "right ankle": 16
+}
+
+# Define the direction to coordinate change mapping
+direction_to_offset = {
+    "up": (0, -50),
+    "down": (0, 50),
+    "left": (-50, 0),
+    "right": (50, 0)
+}
+
+
+
+def parse_input_text(input_text):
+    # Find all keypoints and the direction in the input text
+    pattern = re.compile(r'\b(?:' + '|'.join(re.escape(label) for label in label_to_index.keys()) + r')\b', re.IGNORECASE)
+    found_labels = pattern.findall(input_text)
     
+    direction_pattern = re.compile(r'\b(?:' + '|'.join(re.escape(direction) for direction in direction_to_offset.keys()) + r')\b', re.IGNORECASE)
+    found_directions = direction_pattern.findall(input_text)
+    
+    # Assume the direction is the last part of the input text
+    direction = found_directions[-1].lower() if found_directions else None
+    
+    # Remove the direction part from labels if mistakenly included
+    labels = [label.lower() for label in found_labels if label.lower() not in direction_to_offset]
+    
+    return labels, direction
+
+def extract_keypoints(labels, keypoints):
+    indices = [label_to_index[label] for label in labels]
+    
+    extracted_keypoints = []
+    for person_keypoints in keypoints:
+        person_kps = {}
+        for idx in indices:
+            x, y, v = person_keypoints[idx]
+            person_kps[list(label_to_index.keys())[idx]] = (x.item(), y.item(), v.item())
+        extracted_keypoints.append(person_kps)
+    return extracted_keypoints
+
+def get_points(img, sel_pix, input_text):
+    global handle_or_target
+
     weights = KeypointRCNN_ResNet50_FPN_Weights.DEFAULT
     keypoint_model = keypointrcnn_resnet50_fpn(weights=weights, progress=False)
     keypoint_model = keypoint_model.eval()
     
-    
     keypoints_img = img.copy()
-    # Convert the image to a Torch tensor and add an extra dimension at the beginning
     keypoints_img = to_tensor(keypoints_img).unsqueeze(0)
     
-    
-    # Perform the inference
     with torch.no_grad():
         outputs = keypoint_model(keypoints_img)
         
     keypoints = outputs[0]['keypoints']
-    input_text = input_text
-    
-    extracted_keypoints = extract_keypoints(input_text, keypoints)
+    labels, direction = parse_input_text(input_text)
+    extracted_keypoints = extract_keypoints(labels, keypoints)
 
     for person_kps in extracted_keypoints:
         for label, (x, y, v) in person_kps.items():
             if v > 0:  # Only consider visible keypoints
                 sel_pix.append((int(x), int(y)))
-                sel_pix.append((int(x) + 50, int(y)))
+                if direction:
+                    offset_x, offset_y = direction_to_offset[direction]
+                    sel_pix.append((int(x) + offset_x, int(y) + offset_y))
+                else:
+                    sel_pix.append((int(x), int(y)))
+    
                 
     points = []
     for idx, point in enumerate(sel_pix):
