@@ -20,7 +20,7 @@ import os
 import gradio as gr
 
 from utils.ui_utils import get_points, undo_points
-from utils.ui_utils import clear_all, store_img, train_lora_interface, run_drag
+from utils.ui_utils import clear_all, store_img, train_lora_interface, run_drag, rerun_drag
 from utils.ui_utils import clear_all_gen, store_img_gen, gen_img, run_drag_gen
 
 LENGTH=480 # length of the square area displaying/editing images
@@ -56,6 +56,7 @@ with gr.Blocks() as demo:
                     show_label=True, height=LENGTH, width=LENGTH, interactive=False)
                 with gr.Row():
                     run_button = gr.Button("Run")
+                    rerun_button = gr.Button("Rerun")
                     clear_all_button = gr.Button("Clear All")
 
         # general parameters
@@ -264,6 +265,26 @@ with gr.Blocks() as demo:
     run_button.click(
         run_drag,
         [original_image,
+        input_image,
+        mask,
+        prompt,
+        selected_points,
+        inversion_strength,
+        lam,
+        latent_lr,
+        n_pix_step,
+        model_path,
+        vae_path,
+        lora_path,
+        start_step,
+        start_layer,
+        ],
+        [output_image]
+    )
+    #rerun버튼 추가
+    rerun_button.click(
+        rerun_drag,
+        [output_image,
         input_image,
         mask,
         prompt,
