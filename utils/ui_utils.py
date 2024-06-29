@@ -137,12 +137,12 @@ label_to_index = {
 
 # Define the direction to coordinate change mapping
 direction_to_offset = {
-    "up_d": (0, -50),
-    "down_d": (0, 50),
-    "left_d": (-50, 0),
-    "right_d": (50, 0)
+    "up_d": (0, -120),
+    "down_d": (0, 120),
+    "left_d": (-120, 0),
+    "right_d": (120, 0)
 }
-
+#120으로 바꿈
 
 
 def parse_input_text(input_text):
@@ -413,11 +413,14 @@ def run_drag(source_image,
     # end_point = points[2]
     # final_image = process_points(gen_image, intermediate_point, end_point, mask, args)
 
+    # save_result = torch.cat([
+    #     source_image.float() * 0.5 + 0.5,
+    #     torch.ones((1,3,full_h,25)).cuda(),
+    #     image_with_clicks.float() * 0.5 + 0.5,
+    #     torch.ones((1,3,full_h,25)).cuda(),
+    #     gen_image[0:1].float()
+    # ], dim=-1)
     save_result = torch.cat([
-        source_image.float() * 0.5 + 0.5,
-        torch.ones((1,3,full_h,25)).cuda(),
-        image_with_clicks.float() * 0.5 + 0.5,
-        torch.ones((1,3,full_h,25)).cuda(),
         gen_image[0:1].float()
     ], dim=-1)
 
@@ -428,6 +431,10 @@ def run_drag(source_image,
 
     out_image = gen_image.cpu().permute(0, 2, 3, 1).numpy()[0]
     out_image = (out_image * 255).astype(np.uint8)
+    return out_image, save_result#save_result추가
+
+def run_drag_wrapper(*args):
+    out_image, save_result = run_drag(*args)
     return out_image
 
 def rerun_drag(out_image,
@@ -586,6 +593,104 @@ def rerun_drag(out_image,
     out_image = (out_image * 255).astype(np.uint8)
     return out_image
 # -------------------------------------------------------
+def inter_drag(source_image,
+               image_with_clicks,
+               mask,
+               prompt,
+               points,
+               inversion_strength,
+               lam,
+               latent_lr,
+               n_pix_step,
+               model_path,
+               vae_path,
+               lora_path,
+               start_step,
+               start_layer,
+               save_dir="./results"):
+    
+    # initialize parameters and intermediate points
+    original_point = points[0]
+    intermediate_point = points[1]
+    end_point = points[2]
+    side_points_1 = np.linspace(original_point, intermediate_point, num=32)
+
+    # 두 번째 구간의 중간 점 계산 (intermediate_point -> end_point)
+    side_points_2 = np.linspace(intermediate_point, end_point, num=32)
+
+    # 두 구간의 점들을 결합 (intermediate_point는 중복 제거)
+    side_points = np.vstack([side_points_1, side_points_2[1:]])
+
+    # 시작점부터 각점끼리의 drag하는 과정
+    for i in range(1, len(side_points_1)):
+        point_1 = original_point
+        point_2 = side_points_1[i]
+        print(point_1)
+        print(point_2)
+        # Update the points parameter
+        current_points = [point_1, point_2]
+
+        # Call run_drag with updated points
+        result_image, save_result = run_drag(
+            source_image=source_image,
+            image_with_clicks=image_with_clicks,
+            mask=mask,
+            prompt=prompt,
+            points=current_points,
+            inversion_strength=inversion_strength,
+            lam=lam,
+            latent_lr=latent_lr,
+            n_pix_step=n_pix_step,
+            model_path=model_path,
+            vae_path=vae_path,
+            lora_path=lora_path,
+            start_step=start_step,
+            start_layer=start_layer,
+            save_dir=save_dir
+        )
+        
+        if not os.path.isdir(save_dir):
+            os.mkdir(save_dir)
+        save_prefix = datetime.datetime.now().strftime("%Y-%m-%d-%H%M-%S")
+        save_image(save_result, os.path.join(save_dir, save_prefix + '.png'))
+        
+    second_source = result_image# intermediate까지 간것의 결과
+        
+    # 중간점부터 각점끼리의 drag하는 과정
+    for i in range(1, len(side_points_2)):
+        point_1 = intermediate_point
+        point_2 = side_points_2[i]
+        print(point_1)
+        print(point_2)
+        # Update the points parameter
+        current_points = [point_1, point_2]
+
+        # Call run_drag with updated points
+        result_image, save_result = run_drag(
+            source_image=second_source,# 여기가 result_image일까 아니면 save_image를 processing한걸까
+            image_with_clicks=image_with_clicks,
+            mask=mask,
+            prompt=prompt,
+            points=current_points,
+            inversion_strength=inversion_strength,
+            lam=lam,
+            latent_lr=latent_lr,
+            n_pix_step=n_pix_step,
+            model_path=model_path,
+            vae_path=vae_path,
+            lora_path=lora_path,
+            start_step=start_step,
+            start_layer=start_layer,
+            save_dir=save_dir
+        )
+        
+        if not os.path.isdir(save_dir):
+            os.mkdir(save_dir)
+        save_prefix = datetime.datetime.now().strftime("%Y-%m-%d-%H%M-%S")
+        save_image(save_result, os.path.join(save_dir, save_prefix + '.png'))
+    
+    # Return the last processed image
+    return result_image
 
 # ----------- dragging generated image utils -----------
 # once the user generated an image

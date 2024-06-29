@@ -19,6 +19,10 @@
 import copy
 import torch
 import torch.nn.functional as F
+import os
+import datetime
+from torchvision.utils import save_image
+from .attn_utils import register_attention_editor_diffusers, MutualSelfAttentionControl
 
 
 def point_tracking(F0,
@@ -83,7 +87,8 @@ def drag_diffusion_update(model,
                           handle_points,
                           target_points,
                           mask,
-                          args):
+                          args,
+                          ):
 
     assert len(handle_points) == len(target_points), \
         "number of handle point must equals target points"
@@ -111,11 +116,12 @@ def drag_diffusion_update(model,
     scaler = torch.cuda.amp.GradScaler()
     for step_idx in range(args.n_pix_step):
         with torch.autocast(device_type='cuda', dtype=torch.float16):
+            f_init_code = init_code
             unet_output, F1 = model.forward_unet_features(init_code, t,
                 encoder_hidden_states=text_embeddings,
                 layer_idx=args.unet_feature_idx, interp_res_h=args.sup_res_h, interp_res_w=args.sup_res_w)
             x_prev_updated,_ = model.step(unet_output, t, init_code)
-
+            
             # do point tracking to update handle points before computing motion supervision loss
             if step_idx != 0:
                 handle_points = point_tracking(F0, F1, handle_points, handle_points_init, args)
@@ -152,11 +158,41 @@ def drag_diffusion_update(model,
                 loss += args.lam * ((x_prev_updated-x_prev_0)*(1.0-interp_mask)).abs().sum()
             # loss += args.lam * ((init_code_orig-init_code)*(1.0-interp_mask)).abs().sum()
             print('loss total=%f'%(loss.item()))
+            
+            
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
+        
+        # # result_images라는 곳에 for문이 돌때마다 image 저장 -> 원래 결과값이 저장되는 곳이랑 다름!
+        # updated_init_code = init_code.half()
+        # text_embeddings = text_embeddings.half()
+        # model.unet = model.unet.half()
+
+        # torch.cuda.empty_cache()
+
+        # editor = MutualSelfAttentionControl(start_step=start_step, start_layer=start_layer,
+        #                                         total_steps=args.n_inference_step, guidance_scale=args.guidance_scale)
+        # if lora_path == "":
+        #     register_attention_editor_diffusers(model, editor, attn_processor='attn_proc')
+        # else:
+        #     register_attention_editor_diffusers(model, editor, attn_processor='lora_attn_proc')
+            
+        # inter_image = model(prompt=args.prompt, encoder_hidden_states=torch.cat([text_embeddings] * 2, dim=0),
+        #             batch_size=2, latents=torch.cat([f_init_code, updated_init_code], dim=0),
+        #             guidance_scale=args.guidance_scale,
+        #             num_inference_steps=args.n_inference_step,
+        #             num_actual_inference_steps=args.n_actual_inference_step)[1].unsqueeze(dim=0)
+        # interp_res_h=args.sup_res_h
+        # interp_res_w=args.sup_res_w
+        # inter_image = F.interpolate(inter_image, (interp_res_h, interp_res_w), mode='bilinear')
+        # save_dir = "./result_images"
+        # if not os.path.isdir(save_dir):
+        #     os.mkdir(save_dir)
+        # save_prefix = datetime.datetime.now().strftime("%Y-%m-%d-%H%M-%S")
+        # save_image(inter_image, os.path.join(save_dir, save_prefix + '.png'))
 
     return init_code
 
